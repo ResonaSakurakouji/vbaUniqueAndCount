@@ -59,6 +59,27 @@ Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title A
     End If
 End Function
 
+Function TryNewColorSheetR(sourceSheetName As String) As Worksheet
+    Dim sheetColor As Long
+    Dim newSheetName As String
+    newSheetName = sourceSheetName & "R"
+    sheetColor = RGB(146, 208, 80)
+
+    ' 检查Sheet是否已存在
+    On Error Resume Next
+    Set TryNewColorSheetR = ThisWorkbook.Sheets(newSheetName)
+    On Error GoTo 0
+
+    ' 如果Sheet不存在，则创建并设置标签颜色
+    If TryNewColorSheetR Is Nothing Then
+        ' 创建新Sheet
+        Set TryNewColorSheetR = ThisWorkbook.Sheets.Add(, ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        TryNewColorSheetR.Name = newSheetName
+    End If
+        TryNewColorSheetR.Cells.Clear
+        TryNewColorSheetR.Tab.Color = sheetColor
+End Function
+
 Sub PasteByVBA(sourceRange As Range, targetRange As Range)
     If sourceRange.Rows.Count = targetRange.Rows.Count And sourceRange.Columns.Count = targetRange.Columns.Count Then
         targetRange.Value = sourceRange.Value
@@ -68,9 +89,9 @@ Sub PasteByVBA(sourceRange As Range, targetRange As Range)
 End Sub
 
 Sub 生成报告()
-    'Application.ScreenUpdating = False
+    Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
-    'Application.EnableEvents = False
+    Application.EnableEvents = False
     
     Dim wb As Workbook, ws As Worksheet, rg As Range, str As String
     Set wb = ThisWorkbook
@@ -78,14 +99,17 @@ Sub 生成报告()
     Dim sourceSheetName_List As Variant
     Dim sourceSheetName_i As Variant
     Dim sourceSheet_i As Worksheet
+    Dim targetSheet_i As Worksheet
     Dim ramColumn1_Range As Range, ramColumn2_Range As Range, ramColumns12_Range As Range
+    Dim ramColumnVar_Range As Range
     Dim resultRecordTitle_ColumnLetter As Variant
     Dim resultRecordTitle_ColumnName As String
+    Dim resultRecordTitle_Range As Range
     
     sourceSheetName_List = GetValuesByTitle(SOURCE_SHEET_NAME_FIELD)
-    Set ramColumn1_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:A")
-    Set ramColumn2_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("B:B")
-    Set ramColumns12_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:B")
+    Set ramColumn1_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A:$A")
+    Set ramColumn2_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$B:$B")
+    Set ramColumns12_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A:$B")
     resultRecordTitle_ColumnLetter = GetValuesByTitle(RESULT_RECORD_TITLES_FIELD)(1)
     resultRecordTitle_ColumnName = CStr(resultRecordTitle_ColumnLetter) & ":" & CStr(resultRecordTitle_ColumnLetter)
     
@@ -99,13 +123,24 @@ Sub 生成报告()
     firstField_List = GetValuesByTitle(FIRST_FIELDS_FIELD)
     secondField_List = GetValuesByTitle(SECOND_FIELDS_FIELD)
     
-    For Each sourceSheetName_i In sourceSheetName_List
-        ThisWorkbook.Sheets(RAM_SHEET_NAME).ClearContents
+    Dim ramResultRecordTitle_Range As Range
+    
+    For Each sourceSheetName_i In sourceSheetName_List ' 市、省、大区
+        ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
         Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
+        Set targetSheet_i = TryNewColorSheetR(CStr(sourceSheetName_i))
+        Set resultRecordTitle_Range = targetSheet_i.Range("$A:$A")
         Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
-        For Each firstField_i In firstField_List
+        Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), resultRecordTitle_Range)
+        resultRecordTitle_Range.RemoveDuplicates Columns:=1, Header:=xlYes
+        targetSheet_i.Rows("1:1").Insert Shift:=xlDown
+        Set ramColumnVar_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C:$C")
+        For Each firstField_i In firstField_List ' 商机号、收票方代码
             Set firstFiled_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
             Call PasteByVBA(firstFiled_i_Column, ramColumn2_Range)
+            ramColumns12_Range.RemoveDuplicates Columns:=Array(1, 2), Header:=xlYes
+            Set ramResultRecordTitle_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A$1")
+            Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
             
         Next firstField_i
     Next sourceSheetName_i
