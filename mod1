@@ -149,7 +149,6 @@ Sub 生成报告()
         Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
         Set targetSheet_i = TryNewColorSheetR(CStr(sourceSheetName_i))
         Set resultRecordTitle_Range = targetSheet_i.Range("$A:$A")
-        Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
         Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), resultRecordTitle_Range)
         Set resultRecordTitle_Range = TrimDownRange(resultRecordTitle_Range)
         resultRecordTitle_Range.RemoveDuplicates Columns:=1, Header:=xlYes
@@ -162,16 +161,20 @@ Sub 生成报告()
         
         Set ramColumnVar_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C:$C")
         For Each firstField_i In firstField_List ' 收票方代码、商机号
+            ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
+        
             Set firstField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
             ' 初始化RAM的二级字段作为列标题的Range区域，当前公式单元格的区域，每次写入后向右偏移
             Set ramSecondField_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$1")
             Set ramFunction_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$2")
             
+            Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
             Call PasteByVBA(firstField_i_Column, ramColumn2_Range)
             Set ramColumns12_Range = TrimDownRange(ramColumns12_Range)
             ramColumns12_Range.RemoveDuplicates Columns:=Array(1, 2), Header:=xlYes
             Set ramResultRecordTitle_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A$1")
             Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
+        
             ' 接下来是COUNTIFS
             For Each secondField_i In secondField_List
                 Set secondField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(secondField_i))
@@ -185,6 +188,7 @@ Sub 生成报告()
                 Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
             Next secondField_i
+            
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
