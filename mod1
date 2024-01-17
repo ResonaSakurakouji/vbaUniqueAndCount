@@ -93,6 +93,19 @@ Function TryNewColorSheetR(sourceSheetName As String) As Worksheet
         TryNewColorSheetR.Tab.Color = sheetColor
 End Function
 
+Sub Sheet2Values(sheetName As String)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = Worksheets(sheetName)
+    On Error GoTo 0
+    
+    If Not ws Is Nothing Then
+        ws.UsedRange.Value = ws.UsedRange.Value
+    Else
+        Err.Raise vbObjectError + 9999, "Sheet2Values", "【" & Sheet2Values & "】不存在"
+    End If
+End Sub
+
 Sub PasteByVBA(sourceRange As Range, targetRange As Range)
     ' 裁剪掉sourceRange最下方的所有空单元格
     Set sourceRange = TrimDownRange(sourceRange)
@@ -144,6 +157,8 @@ Sub 生成报告()
     Dim resultSecondfield_CurrentCell As Range
     Dim resultFunction_CurrentCell As Range
     
+    Dim lastRow As Long
+    
     For Each sourceSheetName_i In sourceSheetName_List ' 市、省、大区
         ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
         Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
@@ -183,12 +198,18 @@ Sub 生成报告()
                 resultSecondfield_CurrentCell.Value = CStr(secondField_i)
                 
                 Rem 公式
-                
+                lastRow = Cells(Rows.Count, "A").End(xlUp).Row
+                ramFunction_CurrentCell.FormulaR1C1 = _
+                    "=COUNTIFS(大区!C1,RAM!RC1,大区!C3,RAM!RC2)-COUNTIFS(大区!C1,RAM!RC1,大区!C3,RAM!RC2,大区!C[1],"""")"
+                ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow)
+
+                Set ramFunction_CurrentCell = ramFunction_CurrentCell.Offset(, 1)
                 Set ramSecondField_CurrentCell = ramSecondField_CurrentCell.Offset(, 1)
                 Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
             Next secondField_i
-            
+        Calculate
+        
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
