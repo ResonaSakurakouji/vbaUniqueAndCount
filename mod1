@@ -1,0 +1,105 @@
+Option Explicit
+
+Public Const INI_SHEET_NAME As String = "配"
+Public Const RAM_SHEET_NAME As String = "RAM"
+Public Const SOURCE_SHEET_NAME_FIELD As String = "数据源表名"
+Public Const SECOND_FIELDS_FIELD As String = "结果二级列标题"
+Public Const FIRST_FIELDS_FIELD As String = "结果一级列标题"
+Public Const RESULT_RECORD_TITLES_FIELD As String = "结果行标题所在列"
+
+Function GetValuesByTitle(title As String) As Variant
+    Dim ws As Worksheet
+    Dim titleRange As Range
+    Dim valuesRange As Range
+    Dim cell As Range
+    Dim resultArray() As Variant
+    Dim resultIndex As Integer
+    Set ws = ThisWorkbook.Sheets(INI_SHEET_NAME)
+    Set titleRange = ws.Rows(1).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not titleRange Is Nothing Then
+        ' 找到标题后，获取其下方所有值的范围
+        Set valuesRange = titleRange.Offset(1, 0).Resize(ws.Rows.Count - titleRange.Row, 1).SpecialCells(xlCellTypeConstants, xlTextValues)
+        
+        ' 将值存储到数组中
+        ReDim resultArray(1 To valuesRange.Rows.Count)
+        resultIndex = 1
+        
+        For Each cell In valuesRange
+            resultArray(resultIndex) = cell.Value
+            resultIndex = resultIndex + 1
+        Next cell
+        
+        ' 如果只有一个值，也是数组
+        If UBound(resultArray) = LBound(resultArray) Then
+            GetValuesByTitle = resultArray
+        Else
+            GetValuesByTitle = resultArray
+        End If
+    Else
+        Err.Raise vbObjectError + 9999, "GetValuesByTitle", "【配】标题无法找到"
+    End If
+End Function
+
+Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title As String) As Range
+    Dim titleRange As Range
+    Dim columnNumber As Long
+    ' 在第一行查找标题所在的列
+    Set titleRange = sourceWorksheet.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not titleRange Is Nothing Then
+        ' 获取列号
+        columnNumber = titleRange.Column
+        ' 返回整列的范围
+        Set GetColumnByArgs = sourceWorksheet.Columns(columnNumber)
+    Else
+        ' 如果找不到标题，抛出err
+        Err.Raise vbObjectError + 9999, "GetColumnByArgs", "【" & sourceWorksheet.Name & "】的【" & title & "】无法找到"
+    End If
+End Function
+
+Sub PasteByVBA(sourceRange As Range, targetRange As Range)
+    If sourceRange.Rows.Count = targetRange.Rows.Count And sourceRange.Columns.Count = targetRange.Columns.Count Then
+        targetRange.Value = sourceRange.Value
+    Else
+        Err.Raise vbObjectError + 9999, "PasteByVBA", "源范围和目标范围的尺寸不匹配。"
+    End If
+End Sub
+
+Sub 生成报告()
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    
+    Dim sourceSheetName_List As Variant
+    Dim sourceSheetName_i As Variant
+    Dim sourceSheet_i As Worksheet
+    Dim ramColumn_Range As Range
+    Dim resultRecordTitle_ColumnLetter As Variant
+    Dim resultRecordTitle_ColumnName As String
+    
+    sourceSheetName_List = GetValuesByTitle(SOURCE_SHEET_NAME_FIELD)
+    Set ramColumn_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:A")
+    resultRecordTitle_ColumnLetter = GetValuesByTitle(RESULT_RECORD_TITLES_FIELD)(1)
+    resultRecordTitle_ColumnName = CStr(resultRecordTitle_ColumnLetter) & ":" & CStr(resultRecordTitle_ColumnLetter)
+    
+    Dim firstField_List As Variant
+    Dim secondField_List As Variant
+    Dim firstField_i As Variant
+    Dim secondField_i As Variant
+    
+    firstField_List = GetValuesByTitle(FIRST_FIELDS_FIELD)
+    secondField_List = GetValuesByTitle(SECOND_FIELDS_FIELD)
+    
+    For Each sourceSheetName_i In sourceSheetName_List
+        Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
+        Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn_Range)
+        For Each firstField_i In first_field_list
+            GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i)).Select
+        Next firstField_i
+    Next sourceSheetName_i
+    
+    
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+End Sub
