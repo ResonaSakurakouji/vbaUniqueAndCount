@@ -41,6 +41,7 @@ Function GetValuesByTitle(title As String) As Variant
     End If
 End Function
 
+Rem 这个函数返回的是"$A:$A"这样的字符串
 Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title As String) As Range
     Dim titleRange As Range
     Dim columnNumber As Long
@@ -67,19 +68,24 @@ Sub PasteByVBA(sourceRange As Range, targetRange As Range)
 End Sub
 
 Sub 生成报告()
-    Application.ScreenUpdating = False
+    'Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
-    Application.EnableEvents = False
+    'Application.EnableEvents = False
+    
+    Dim wb As Workbook, ws As Worksheet, rg As Range, str As String
+    Set wb = ThisWorkbook
     
     Dim sourceSheetName_List As Variant
     Dim sourceSheetName_i As Variant
     Dim sourceSheet_i As Worksheet
-    Dim ramColumn_Range As Range
+    Dim ramColumn1_Range As Range, ramColumn2_Range As Range, ramColumns12_Range As Range
     Dim resultRecordTitle_ColumnLetter As Variant
     Dim resultRecordTitle_ColumnName As String
     
     sourceSheetName_List = GetValuesByTitle(SOURCE_SHEET_NAME_FIELD)
-    Set ramColumn_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:A")
+    Set ramColumn1_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:A")
+    Set ramColumn2_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("B:B")
+    Set ramColumns12_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("A:B")
     resultRecordTitle_ColumnLetter = GetValuesByTitle(RESULT_RECORD_TITLES_FIELD)(1)
     resultRecordTitle_ColumnName = CStr(resultRecordTitle_ColumnLetter) & ":" & CStr(resultRecordTitle_ColumnLetter)
     
@@ -87,15 +93,20 @@ Sub 生成报告()
     Dim secondField_List As Variant
     Dim firstField_i As Variant
     Dim secondField_i As Variant
+    Dim firstFiled_i_Column As Range
+    Dim secondFiled_i_Column As Range
     
     firstField_List = GetValuesByTitle(FIRST_FIELDS_FIELD)
     secondField_List = GetValuesByTitle(SECOND_FIELDS_FIELD)
     
     For Each sourceSheetName_i In sourceSheetName_List
+        ThisWorkbook.Sheets(RAM_SHEET_NAME).ClearContents
         Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
-        Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn_Range)
-        For Each firstField_i In first_field_list
-            GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i)).Select
+        Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
+        For Each firstField_i In firstField_List
+            Set firstFiled_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
+            Call PasteByVBA(firstFiled_i_Column, ramColumn2_Range)
+            
         Next firstField_i
     Next sourceSheetName_i
     
