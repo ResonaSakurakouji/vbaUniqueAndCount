@@ -1,4 +1,5 @@
 Option Explicit
+Rem 20240117 营业支持部-秦睿征
 
 Public Const INI_SHEET_NAME As String = "配"
 Public Const RAM_SHEET_NAME As String = "RAM"
@@ -6,6 +7,7 @@ Public Const SOURCE_SHEET_NAME_FIELD As String = "数据源表名"
 Public Const SECOND_FIELDS_FIELD As String = "结果二级列标题"
 Public Const FIRST_FIELDS_FIELD As String = "结果一级列标题"
 Public Const RESULT_RECORD_TITLES_FIELD As String = "结果行标题所在列"
+Public Const RESULT_FINAL_SUM_FIELD As String = "总计"
 
 Function GetValuesByTitle(title As String) As Variant
     Dim ws As Worksheet
@@ -41,7 +43,18 @@ Function GetValuesByTitle(title As String) As Variant
     End If
 End Function
 
-Rem 这个函数返回的是"$A:$A"这样的字符串
+Function TrimDownRange(ByRef rng As Range) As Range
+    Dim lastRow As Long
+    If rng Is Nothing Then
+        Set TrimDownRange = Nothing
+        Exit Function
+    End If
+    ' 获取最后一个非空单元格的行号
+    lastRow = rng.Cells(rng.Rows.Count, 1).End(xlDown).Row
+    ' 裁剪 Range
+    Set TrimDownRange = rng.Resize(lastRow - rng.Row + 1)
+End Function
+
 Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title As String) As Range
     Dim titleRange As Range
     Dim columnNumber As Long
@@ -81,14 +94,15 @@ Function TryNewColorSheetR(sourceSheetName As String) As Worksheet
 End Function
 
 Sub PasteByVBA(sourceRange As Range, targetRange As Range)
-    If sourceRange.Rows.Count = targetRange.Rows.Count And sourceRange.Columns.Count = targetRange.Columns.Count Then
-        targetRange.Value = sourceRange.Value
-    Else
-        Err.Raise vbObjectError + 9999, "PasteByVBA", "源范围和目标范围的尺寸不匹配。"
-    End If
+    ' 裁剪掉sourceRange最下方的所有空单元格
+    Set sourceRange = TrimDownRange(sourceRange)
+    Set targetRange = targetRange.Resize(sourceRange.Rows.Count, sourceRange.Columns.Count)
+    targetRange.Value = sourceRange.Value
 End Sub
 
 Sub 生成报告()
+    Dim t
+    t = Timer
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.EnableEvents = False
@@ -117,13 +131,18 @@ Sub 生成报告()
     Dim secondField_List As Variant
     Dim firstField_i As Variant
     Dim secondField_i As Variant
-    Dim firstFiled_i_Column As Range
-    Dim secondFiled_i_Column As Range
+    Dim firstField_i_Column As Range
+    Dim secondField_i_Column As Range
     
     firstField_List = GetValuesByTitle(FIRST_FIELDS_FIELD)
     secondField_List = GetValuesByTitle(SECOND_FIELDS_FIELD)
     
     Dim ramResultRecordTitle_Range As Range
+    Dim ramSecondField_CurrentCell As Range
+    Dim ramFunction_CurrentCell As Range
+    Dim resultFirstField_CurrentCell As Range
+    Dim resultSecondfield_CurrentCell As Range
+    Dim resultFunction_CurrentCell As Range
     
     For Each sourceSheetName_i In sourceSheetName_List ' 市、省、大区
         ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
@@ -132,20 +151,54 @@ Sub 生成报告()
         Set resultRecordTitle_Range = targetSheet_i.Range("$A:$A")
         Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
         Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), resultRecordTitle_Range)
+        Set resultRecordTitle_Range = TrimDownRange(resultRecordTitle_Range)
         resultRecordTitle_Range.RemoveDuplicates Columns:=1, Header:=xlYes
-        targetSheet_i.Rows("1:1").Insert Shift:=xlDown
+        targetSheet_i.Rows("$1:$1").Insert Shift:=xlDown
+        
+        ' 初始化结果sheet的一级二级字段，当前公式单元格的位置，每次写入会向右偏移
+        Set resultFirstField_CurrentCell = targetSheet_i.Range("$B$1")
+        Set resultSecondfield_CurrentCell = targetSheet_i.Range("$B$2")
+        Set resultFunction_CurrentCell = targetSheet_i.Range("$B$3")
+        
         Set ramColumnVar_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C:$C")
-        For Each firstField_i In firstField_List ' 商机号、收票方代码
-            Set firstFiled_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
-            Call PasteByVBA(firstFiled_i_Column, ramColumn2_Range)
+        For Each firstField_i In firstField_List ' 收票方代码、商机号
+            Set firstField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
+            ' 初始化RAM的二级字段作为列标题的Range区域，当前公式单元格的区域，每次写入后向右偏移
+            Set ramSecondField_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$1")
+            Set ramFunction_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$2")
+            
+            Call PasteByVBA(firstField_i_Column, ramColumn2_Range)
+            Set ramColumns12_Range = TrimDownRange(ramColumns12_Range)
             ramColumns12_Range.RemoveDuplicates Columns:=Array(1, 2), Header:=xlYes
             Set ramResultRecordTitle_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A$1")
             Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
-            
+            ' 接下来是COUNTIFS
+            For Each secondField_i In secondField_List
+                Set secondField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(secondField_i))
+                ramSecondField_CurrentCell(1).Value = CStr(secondField_i)
+                resultFirstField_CurrentCell.Value = CStr(firstField_i)
+                resultSecondfield_CurrentCell.Value = CStr(secondField_i)
+                
+                Rem 公式
+                
+                Set ramSecondField_CurrentCell = ramSecondField_CurrentCell.Offset(, 1)
+                Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
+                Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+            Next secondField_i
         Next firstField_i
+        ' 接下来是作为收尾的SUMIFS
+        For Each secondField_i In secondField_List
+            resultFirstField_CurrentCell.Value = RESULT_FINAL_SUM_FIELD
+            resultSecondfield_CurrentCell.Value = CStr(secondField_i)
+            
+            Rem 公式
+            
+            Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
+            Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+        Next secondField_i
     Next sourceSheetName_i
     
-    
+    Debug.Print "》总耗时" & CStr(Timer - t)
     Application.ScreenUpdating = True
     Application.EnableEvents = True
 End Sub
