@@ -226,14 +226,18 @@ Sub 生成去重统计()
                 ramFunction_CurrentCell.FormulaR1C1 = _
                     "=COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2," & s2 & ",""<>""," & s2 & ",""<>0"")"
                 lastRow = ram_Sheet.UsedRange.Rows.Count
+                On Error Resume Next
                 ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow - 1)
-
+                On Error GoTo 0
+                
                 Rem RESULT公式
                 s2 = GetFullC(ram_Sheet, 1, CStr(secondField_i))
                 resultFunction_CurrentCell.FormulaR1C1 = _
                     "=COUNTIFS(RAM!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0"")"
                 lastRow = targetSheet_i.UsedRange.Rows.Count
+                On Error Resume Next
                 resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
+                On Error GoTo 0
                 
                 Calculate
                 Call Sheet2Values(targetSheet_i)
@@ -266,7 +270,9 @@ Sub 生成去重统计()
             resultFunction_CurrentCell.FormulaR1C1 = _
                 "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1)"
             lastRow = targetSheet_i.UsedRange.Rows.Count
+            On Error Resume Next
             resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
+            On Error GoTo 0
             
             Calculate
             Call Sheet2Values(targetSheet_i)
