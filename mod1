@@ -58,7 +58,6 @@ End Function
 Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title As String) As Range
     Dim titleRange As Range
     Dim columnNumber As Long
-    ' 在第一行查找标题所在的列
     Set titleRange = sourceWorksheet.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
     
     If Not titleRange Is Nothing Then
@@ -91,6 +90,31 @@ Function TryNewColorSheetR(sourceSheetName As String) As Worksheet
     End If
         TryNewColorSheetR.Cells.Clear
         TryNewColorSheetR.Tab.Color = sheetColor
+End Function
+
+Rem 该函数返回的是列的RC引用字符串，用于VBA拼接公式
+Function GetFullC(worksheetName As String, rowIndex As Long, title As String) As String
+    
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = Worksheets(worksheetName)
+    On Error GoTo 0
+
+    If Not ws Is Nothing Then
+        Dim cell As Range
+        Dim columnNumber As Long
+        On Error Resume Next
+        Set cell = ws.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+        On Error GoTo 0
+
+        If Not cell Is Nothing Then
+            GetFullC = "'" & worksheetName & "'!C" & CStr(cell.Column)
+        Else
+            Err.Raise vbObjectError + 9999, "GetFullC", "【" & worksheetName & "】的【" & title & "】无法找到"
+        End If
+    Else
+        Err.Raise vbObjectError + 9999, "GetFullC", "【" & worksheetName & "】无法找到"
+    End If
 End Function
 
 Sub Sheet2Values(sheetName As String)
@@ -158,6 +182,7 @@ Sub 生成报告()
     Dim resultFunction_CurrentCell As Range
     
     Dim lastRow As Long
+    Dim s0 As String, s1 As String, s2 As String
     
     For Each sourceSheetName_i In sourceSheetName_List ' 市、省、大区
         ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
@@ -196,20 +221,28 @@ Sub 生成报告()
                 ramSecondField_CurrentCell(1).Value = CStr(secondField_i)
                 resultFirstField_CurrentCell.Value = CStr(firstField_i)
                 resultSecondfield_CurrentCell.Value = CStr(secondField_i)
+                s0 = GetFullC(sourceSheetName_i, 1, Range("$A$1").Value) ' [项目所在城]
+                s1 = GetFullC(sourceSheetName_i, 1, CStr(firstField_i)) ' 收票方代码
+                s2 = GetFullC(sourceSheetName_i, 1, CStr(secondField_i)) ' 保障房
                 
                 Rem 公式
                 lastRow = Cells(Rows.Count, "A").End(xlUp).Row
                 ramFunction_CurrentCell.FormulaR1C1 = _
-                    "=COUNTIFS(大区!C1,RAM!RC1,大区!C3,RAM!RC2)-COUNTIFS(大区!C1,RAM!RC1,大区!C3,RAM!RC2,大区!C[1],"""")"
-                ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow)
+                    "=COUNTIFS(" & s1 & ",RAM!RC1," & s2 & ",RAM!RC2)-" & _
+                    "COUNTIFS(" & s1 & ",RAM!RC1," & s2 & ",RAM!RC2," & s3 & ","""")"
+                ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow - 1)
+
+                'resultFunction_CurrentCell
 
                 Set ramFunction_CurrentCell = ramFunction_CurrentCell.Offset(, 1)
                 Set ramSecondField_CurrentCell = ramSecondField_CurrentCell.Offset(, 1)
                 Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+                Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
             Next secondField_i
-        Calculate
-        
+            Calculate
+            Call Sheet2Values(RAM_SHEET_NAME)
+            
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
