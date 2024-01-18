@@ -93,41 +93,22 @@ Function TryNewColorSheetR(sourceSheetName As String) As Worksheet
 End Function
 
 Rem 该函数返回的是列的RC引用字符串，用于VBA拼接公式
-Function GetFullC(worksheetName As String, rowIndex As Long, title As String) As String
-    
-    Dim ws As Worksheet
+Function GetFullC(ws As Worksheet, rowIndex As Long, title As String) As String
+    Dim cell As Range
+    Dim columnNumber As Long
     On Error Resume Next
-    Set ws = Worksheets(worksheetName)
+    Set cell = ws.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
     On Error GoTo 0
 
-    If Not ws Is Nothing Then
-        Dim cell As Range
-        Dim columnNumber As Long
-        On Error Resume Next
-        Set cell = ws.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
-        On Error GoTo 0
-
-        If Not cell Is Nothing Then
-            GetFullC = "'" & worksheetName & "'!C" & CStr(cell.Column)
-        Else
-            Err.Raise vbObjectError + 9999, "GetFullC", "【" & worksheetName & "】的【" & title & "】无法找到"
-        End If
+    If Not cell Is Nothing Then
+        GetFullC = "'" & ws.Name & "'!C" & CStr(cell.Column)
     Else
-        Err.Raise vbObjectError + 9999, "GetFullC", "【" & worksheetName & "】无法找到"
+        Err.Raise vbObjectError + 9999, "GetFullC", "【" & ws.Name & "】的【" & title & "】无法找到"
     End If
 End Function
 
-Sub Sheet2Values(sheetName As String)
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = Worksheets(sheetName)
-    On Error GoTo 0
-    
-    If Not ws Is Nothing Then
-        ws.UsedRange.Value = ws.UsedRange.Value
-    Else
-        Err.Raise vbObjectError + 9999, "Sheet2Values", "【" & Sheet2Values & "】不存在"
-    End If
+Sub Sheet2Values(ws As Worksheet)
+    ws.UsedRange.Value = ws.UsedRange.Value
 End Sub
 
 Sub PasteByVBA(sourceRange As Range, targetRange As Range)
@@ -151,6 +132,7 @@ Sub 生成报告()
     Dim sourceSheetName_i As Variant
     Dim sourceSheet_i As Worksheet
     Dim targetSheet_i As Worksheet
+    Dim ram_Sheet As Worksheet
     Dim ramColumn1_Range As Range, ramColumn2_Range As Range, ramColumns12_Range As Range
     Dim ramColumnVar_Range As Range
     Dim resultRecordTitle_ColumnLetter As Variant
@@ -158,9 +140,10 @@ Sub 生成报告()
     Dim resultRecordTitle_Range As Range
     
     sourceSheetName_List = GetValuesByTitle(SOURCE_SHEET_NAME_FIELD)
-    Set ramColumn1_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A:$A")
-    Set ramColumn2_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$B:$B")
-    Set ramColumns12_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A:$B")
+    Set ram_Sheet = ThisWorkbook.Sheets(RAM_SHEET_NAME)
+    Set ramColumn1_Range = ram_Sheet.Range("$A:$A")
+    Set ramColumn2_Range = ram_Sheet.Range("$B:$B")
+    Set ramColumns12_Range = ram_Sheet.Range("$A:$B")
     resultRecordTitle_ColumnLetter = GetValuesByTitle(RESULT_RECORD_TITLES_FIELD)(1)
     resultRecordTitle_ColumnName = CStr(resultRecordTitle_ColumnLetter) & ":" & CStr(resultRecordTitle_ColumnLetter)
     
@@ -185,7 +168,7 @@ Sub 生成报告()
     Dim s0 As String, s1 As String, s2 As String
     
     For Each sourceSheetName_i In sourceSheetName_List ' 市、省、大区
-        ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
+        ram_Sheet.Cells.Clear
         Set sourceSheet_i = ThisWorkbook.Sheets(CStr(sourceSheetName_i))
         Set targetSheet_i = TryNewColorSheetR(CStr(sourceSheetName_i))
         Set resultRecordTitle_Range = targetSheet_i.Range("$A:$A")
@@ -199,20 +182,20 @@ Sub 生成报告()
         Set resultSecondfield_CurrentCell = targetSheet_i.Range("$B$2")
         Set resultFunction_CurrentCell = targetSheet_i.Range("$B$3")
         
-        Set ramColumnVar_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C:$C")
+        Set ramColumnVar_Range = ram_Sheet.Range("$C:$C")
         For Each firstField_i In firstField_List ' 收票方代码、商机号
             ThisWorkbook.Sheets(RAM_SHEET_NAME).Cells.Clear
         
             Set firstField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
             ' 初始化RAM的二级字段作为列标题的Range区域，当前公式单元格的区域，每次写入后向右偏移
-            Set ramSecondField_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$1")
-            Set ramFunction_CurrentCell = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$C$2")
+            Set ramSecondField_CurrentCell = ram_Sheet.Range("$C$1")
+            Set ramFunction_CurrentCell = ram_Sheet.Range("$C$2")
             
             Call PasteByVBA(sourceSheet_i.Range(resultRecordTitle_ColumnName), ramColumn1_Range)
             Call PasteByVBA(firstField_i_Column, ramColumn2_Range)
             Set ramColumns12_Range = TrimDownRange(ramColumns12_Range)
             ramColumns12_Range.RemoveDuplicates Columns:=Array(1, 2), Header:=xlYes
-            Set ramResultRecordTitle_Range = ThisWorkbook.Sheets(RAM_SHEET_NAME).Range("$A$1")
+            Set ramResultRecordTitle_Range = ram_Sheet.Range("$A$1")
             Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
         
             ' 接下来是COUNTIFS
@@ -221,15 +204,17 @@ Sub 生成报告()
                 ramSecondField_CurrentCell(1).Value = CStr(secondField_i)
                 resultFirstField_CurrentCell.Value = CStr(firstField_i)
                 resultSecondfield_CurrentCell.Value = CStr(secondField_i)
-                s0 = GetFullC(sourceSheetName_i, 1, Range("$A$1").Value) ' [项目所在城]
-                s1 = GetFullC(sourceSheetName_i, 1, CStr(firstField_i)) ' 收票方代码
-                s2 = GetFullC(sourceSheetName_i, 1, CStr(secondField_i)) ' 保障房
+                s0 = GetFullC(sourceSheet_i, 1, Range("$A$1").Value) ' [项目所在城]
+                s1 = GetFullC(sourceSheet_i, 1, CStr(firstField_i)) ' 收票方代码
+                s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i)) ' 保障房
                 
                 Rem 公式
-                lastRow = Cells(Rows.Count, "A").End(xlUp).Row
+                Application.EnableEvents = True
+                Application.EnableEvents = False
+                lastRow = ram_Sheet.UsedRange.Rows.Count
                 ramFunction_CurrentCell.FormulaR1C1 = _
-                    "=COUNTIFS(" & s1 & ",RAM!RC1," & s2 & ",RAM!RC2)-" & _
-                    "COUNTIFS(" & s1 & ",RAM!RC1," & s2 & ",RAM!RC2," & s3 & ","""")"
+                    "=COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2)-" & _
+                    "COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2," & s2 & ","""")"
                 ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow - 1)
 
                 'resultFunction_CurrentCell
@@ -240,9 +225,11 @@ Sub 生成报告()
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
                 Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
             Next secondField_i
+            Application.EnableEvents = True
             Calculate
-            Call Sheet2Values(RAM_SHEET_NAME)
-            
+            Call Sheet2Values(ram_Sheet)
+            Call Sheet2Values(targetSheet_i)
+            Application.EnableEvents = False
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
