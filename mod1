@@ -1,5 +1,5 @@
 Option Explicit
-Rem 20240117 营业支持部-秦睿征 hataruizen@qq.com
+Rem 20240117 营业支持部-秦睿征  hataruizen@qq.com
 
 Public Const INI_SHEET_NAME As String = "配"
 Public Const RAM_SHEET_NAME As String = "RAM"
@@ -118,12 +118,14 @@ Sub PasteByVBA(sourceRange As Range, targetRange As Range)
     targetRange.Value = sourceRange.Value
 End Sub
 
-Sub 生成报告()
+Sub 生成去重统计()
     Dim t
     t = Timer
+    Application.EnableEvents = True
     Application.ScreenUpdating = False
-    Application.Calculation = xlCalculationManual
-    Application.EnableEvents = False
+    Dim calcStatus As Variant
+    calcStatus = Application.Calculation
+    Application.Calculation = xlCalculationAutomatic
     
     Dim wb As Workbook, ws As Worksheet, rg As Range, str As String
     Set wb = ThisWorkbook
@@ -200,7 +202,6 @@ Sub 生成报告()
             Set ramResultRecordTitle_Range = ram_Sheet.Range("$A$1")
             Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
         
-            Application.EnableEvents = True
             ' 接下来是COUNTIFS
             For Each secondField_i In secondField_List
                 Set secondField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(secondField_i))
@@ -225,13 +226,13 @@ Sub 生成报告()
                 resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
                 
                 Calculate
+                Call Sheet2Values(targetSheet_i)
                 Set ramFunction_CurrentCell = ramFunction_CurrentCell.Offset(, 1)
                 Set ramSecondField_CurrentCell = ramSecondField_CurrentCell.Offset(, 1)
                 Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
                 Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
             Next secondField_i
-            Call Sheet2Values(targetSheet_i)
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
@@ -246,16 +247,19 @@ Sub 生成报告()
             lastRow = targetSheet_i.UsedRange.Rows.Count
             resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
             
+            Calculate
+            Call Sheet2Values(targetSheet_i)
             Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
             Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
             Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
         Next secondField_i
+        
+        
     Next sourceSheetName_i
     
     
     ram_Sheet.Cells.Clear
+    Application.Calculation = calcStatus
     Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    Calculate
     Debug.Print "》总耗时" & CStr(Timer - t)
 End Sub
