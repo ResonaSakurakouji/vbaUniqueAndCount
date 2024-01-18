@@ -1,5 +1,5 @@
 Option Explicit
-Rem 20240117 营业支持部-秦睿征
+Rem 20240117 营业支持部-秦睿征 hataruizen@qq.com
 
 Public Const INI_SHEET_NAME As String = "配"
 Public Const RAM_SHEET_NAME As String = "RAM"
@@ -136,6 +136,7 @@ Sub 生成报告()
     Dim ramColumn1_Range As Range, ramColumn2_Range As Range, ramColumns12_Range As Range
     Dim ramColumnVar_Range As Range
     Dim resultRecordTitle_ColumnLetter As Variant
+    Dim resultRecordTitle_ColumnIndex As Long
     Dim resultRecordTitle_ColumnName As String
     Dim resultRecordTitle_Range As Range
     
@@ -145,6 +146,7 @@ Sub 生成报告()
     Set ramColumn2_Range = ram_Sheet.Range("$B:$B")
     Set ramColumns12_Range = ram_Sheet.Range("$A:$B")
     resultRecordTitle_ColumnLetter = GetValuesByTitle(RESULT_RECORD_TITLES_FIELD)(1)
+    resultRecordTitle_ColumnIndex = Range(resultRecordTitle_ColumnLetter & "1").Column
     resultRecordTitle_ColumnName = CStr(resultRecordTitle_ColumnLetter) & ":" & CStr(resultRecordTitle_ColumnLetter)
     
     Dim firstField_List As Variant
@@ -198,52 +200,62 @@ Sub 生成报告()
             Set ramResultRecordTitle_Range = ram_Sheet.Range("$A$1")
             Set ramResultRecordTitle_Range = Range(ramResultRecordTitle_Range, ramResultRecordTitle_Range.End(xlDown))
         
+            Application.EnableEvents = True
             ' 接下来是COUNTIFS
             For Each secondField_i In secondField_List
                 Set secondField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(secondField_i))
                 ramSecondField_CurrentCell(1).Value = CStr(secondField_i)
                 resultFirstField_CurrentCell.Value = CStr(firstField_i)
                 resultSecondfield_CurrentCell.Value = CStr(secondField_i)
-                s0 = GetFullC(sourceSheet_i, 1, Range("$A$1").Value) ' [项目所在城]
+                s0 = "'" & sourceSheet_i.Name & "'!C" & CStr(resultRecordTitle_ColumnIndex) ' [项目所在城]
                 s1 = GetFullC(sourceSheet_i, 1, CStr(firstField_i)) ' 收票方代码
-                s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i)) ' 保障房
                 
-                Rem 公式
-                Application.EnableEvents = True
-                Application.EnableEvents = False
-                lastRow = ram_Sheet.UsedRange.Rows.Count
+                Rem RAM公式
+                s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i)) ' 保障房
                 ramFunction_CurrentCell.FormulaR1C1 = _
-                    "=COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2)-" & _
-                    "COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2," & s2 & ","""")"
+                    "=COUNTIFS(" & s0 & ",RAM!RC1," & s1 & ",RAM!RC2," & s2 & ",""<>""," & s2 & ",""<>0"")"
+                lastRow = ram_Sheet.UsedRange.Rows.Count
                 ramFunction_CurrentCell.AutoFill Destination:=ramFunction_CurrentCell.Resize(lastRow - 1)
 
-                'resultFunction_CurrentCell
-
+                Rem RESULT公式
+                s2 = GetFullC(ram_Sheet, 1, CStr(secondField_i)) ' 保障房
+                resultFunction_CurrentCell.FormulaR1C1 = _
+                    "=COUNTIFS(RAM!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0"")"
+                lastRow = targetSheet_i.UsedRange.Rows.Count
+                resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
+                
+                Calculate
                 Set ramFunction_CurrentCell = ramFunction_CurrentCell.Offset(, 1)
                 Set ramSecondField_CurrentCell = ramSecondField_CurrentCell.Offset(, 1)
                 Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
                 Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
             Next secondField_i
-            Application.EnableEvents = True
-            Calculate
-            Call Sheet2Values(ram_Sheet)
             Call Sheet2Values(targetSheet_i)
-            Application.EnableEvents = False
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
             resultFirstField_CurrentCell.Value = RESULT_FINAL_SUM_FIELD
             resultSecondfield_CurrentCell.Value = CStr(secondField_i)
+            s0 = "'" & sourceSheet_i.Name & "'!C" & CStr(resultRecordTitle_ColumnIndex) ' [项目所在城]
+            s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i))
             
             Rem 公式
+            resultFunction_CurrentCell.FormulaR1C1 = _
+                "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1)"
+            lastRow = targetSheet_i.UsedRange.Rows.Count
+            resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
             
             Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
             Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+            Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
         Next secondField_i
     Next sourceSheetName_i
     
-    Debug.Print "》总耗时" & CStr(Timer - t)
+    
+    ram_Sheet.Cells.Clear
     Application.ScreenUpdating = True
     Application.EnableEvents = True
+    Calculate
+    Debug.Print "》总耗时" & CStr(Timer - t)
 End Sub
