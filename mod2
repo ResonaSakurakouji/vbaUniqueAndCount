@@ -1,5 +1,5 @@
 Option Explicit
-Rem 20240117 营业支持部-秦睿征  hataruizen@qq.com
+Rem 20240119 营业支持部-秦睿征  hataruizen@qq.com
 
 Public Const UNIQUE_TAIL As String = "巜"
 Public Const INI_SHEET_NAME As String = "配"
@@ -125,8 +125,8 @@ Function CreateRAM1(dataWs As Worksheet, rowTitleField As String, firstField As 
     ram1_secondFieldsTitle = GetValuesByTitle(RAM1_SECOND_FIELDS_TITLE)(1)
     wsUsedRangeAddress = dataWs.Name & "!" & dataWs.UsedRange.Address(, , xlR1C1)
     wb.PivotCaches.Create(SourceType:=xlDatabase, SourceData:= _
-        wsUsedRangeAddress, Version:=8).CreatePivotTable TableDestination:= _
-        RAM1_SHEET_NAME & "!R3C1", TableName:=RAM1_SHEET_NAME, DefaultVersion:=8
+        wsUsedRangeAddress).CreatePivotTable TableDestination:= _
+        RAM1_SHEET_NAME & "!R3C1", TableName:=RAM1_SHEET_NAME
     With thisWs.PivotTables(RAM1_SHEET_NAME)
         .ColumnGrand = False
         .HasAutoFormat = False
@@ -204,7 +204,7 @@ Sub 生成去重统计()
     Dim t
     t = Timer
     Application.EnableEvents = True
-    ' Application.ScreenUpdating = False
+    Application.ScreenUpdating = False
     Dim calcStatus As Variant
     calcStatus = Application.Calculation
     Application.Calculation = xlCalculationAutomatic
