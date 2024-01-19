@@ -292,7 +292,8 @@ Sub 生成去重统计()
                         "【" & CStr(firstField_i) & "】字段联合去重后，" & Chr(10) & _
                         "使用 COUNTIFS 统计" & Chr(10) & _
                         "【" & CStr(secondField_i) & "】字段中" & Chr(10) & _
-                        "不为空且不为0的记录的数量"
+                        "不为空且不为0的记录的数量" & Chr(10) & _
+                        CStr(firstField_i) & "为空白的情况下不会被记入"
                     .Comment.Shape.Height = 108
                     .Comment.Shape.Width = 150
                 End With
@@ -302,7 +303,7 @@ Sub 生成去重统计()
                 Rem RESULT公式
                 s2 = GetFullC(ram2_Sheet, 1, CStr(secondField_i))
                 resultFunction_CurrentCell.FormulaR1C1 = _
-                    "=COUNTIFS(RAM2!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0"")"
+                    "=COUNTIFS(RAM2!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0""," & s1 & ",""<>(空白)"")"
                 lastRow = targetSheet_i.UsedRange.Rows.Count
                 On Error Resume Next
                 resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
@@ -326,7 +327,8 @@ Sub 生成去重统计()
                     "对【" & sourceSheet_i.Name & "】隐藏Sheet的" & Chr(10) & _
                     "【" & CStr(secondField_i) & "】列的" & Chr(10) & _
                     "【" & targetSheet_i.Range("$A$2").Value & "】列" & Chr(10) & _
-                    "的条件求和"
+                    "的条件求和" & Chr(10) & _
+                    CStr(firstField_i) & "为空白的情况下不会被记入"
                 .Comment.Shape.Height = 108
                 .Comment.Shape.Width = 120
             End With
@@ -335,7 +337,7 @@ Sub 生成去重统计()
             
             Rem 公式
             resultFunction_CurrentCell.FormulaR1C1 = _
-                "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1)"
+                "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1," & s1 & ",""<>(空白)"")"
             lastRow = targetSheet_i.UsedRange.Rows.Count
             On Error Resume Next
             resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
