@@ -1,0 +1,358 @@
+Option Explicit
+Rem 20240117 营业支持部-秦睿征  hataruizen@qq.com
+
+Public Const UNIQUE_TAIL As String = "巜"
+Public Const INI_SHEET_NAME As String = "配"
+Public Const SOURCE_SHEET_NAME As String = "源"
+Public Const RAM2_SHEET_NAME As String = "RAM2"
+Public Const RAM1_SHEET_NAME As String = "RAM1"
+Public Const RAM1_RECORD_TITLES_FIELD As String = "结果行标题的列标题名"
+Public Const RAM1_SECOND_FIELDS_TITLE As String = "结果二级列计数项标题所在【源】的列标题名"
+Public Const RAM1_SECOND_FIELDS_FIELD As String = "结果二级列计数项标题筛选"
+Public Const RAM2_FIRST_FIELDS_FIELD As String = "结果一级计数项列标题名"
+Public Const RESULT_SUM_TARGET_FIELDS_FIELD As String = "【源】的非0依据且求和项"
+Public Const RESULT_FINAL_SUM_FIELD As String = "总计"
+
+Function GetValuesByTitle(title As String) As Variant
+    Dim ws As Worksheet
+    Dim titleRange As Range
+    Dim valuesRange As Range
+    Dim cell As Range
+    Dim resultArray() As Variant
+    Dim resultIndex As Integer
+    Set ws = ThisWorkbook.Sheets(INI_SHEET_NAME)
+    Set titleRange = ws.Rows(1).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not titleRange Is Nothing Then
+        ' 找到标题后，获取其下方所有值的范围
+        Set valuesRange = titleRange.Offset(1, 0).Resize(ws.Rows.Count - titleRange.Row, 1).SpecialCells(xlCellTypeConstants, xlTextValues)
+        
+        ' 将值存储到数组中
+        ReDim resultArray(1 To valuesRange.Rows.Count)
+        resultIndex = 1
+        
+        For Each cell In valuesRange
+            resultArray(resultIndex) = cell.Value
+            resultIndex = resultIndex + 1
+        Next cell
+        
+        ' 如果只有一个值，也是数组
+        If UBound(resultArray) = LBound(resultArray) Then
+            GetValuesByTitle = resultArray
+        Else
+            GetValuesByTitle = resultArray
+        End If
+    Else
+        Err.Raise vbObjectError + 9999, "GetValuesByTitle", "【配】标题无法找到【" & title & "】"
+    End If
+End Function
+
+Function TrimDownRange(ByRef rng As Range) As Range
+    Dim lastRow As Long
+    If rng Is Nothing Then
+        Set TrimDownRange = Nothing
+        Exit Function
+    End If
+    ' 获取最后一个非空单元格的行号
+    lastRow = rng.Cells(rng.Rows.Count, 1).End(xlDown).Row
+    Set TrimDownRange = rng.Resize(lastRow - rng.Row + 1)
+End Function
+
+Function GetColumnByArgs(sourceWorksheet As Worksheet, rowIndex As Long, title As String) As Range
+    Dim titleRange As Range
+    Dim columnNumber As Long
+    Set titleRange = sourceWorksheet.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not titleRange Is Nothing Then
+        columnNumber = titleRange.Column
+        Set GetColumnByArgs = sourceWorksheet.Columns(columnNumber)
+    Else
+        ' 如果找不到标题，抛出err
+        Err.Raise vbObjectError + 9999, "GetColumnByArgs", "【" & sourceWorksheet.Name & "】的【" & title & "】无法找到"
+    End If
+End Function
+
+Function TryNewColorSheetR(sourceSheetName As String, Optional ByVal tail As String = "R") As Worksheet
+    Dim sheetColor As Long
+    Dim newSheetName As String
+    newSheetName = sourceSheetName & tail
+    If tail = "R" Then
+        sheetColor = RGB(146, 208, 80)
+    Else
+        sheetColor = RGB(0, 0, 0)
+    End If
+
+    ' 检查Sheet是否已存在
+    On Error Resume Next
+    Set TryNewColorSheetR = ThisWorkbook.Sheets(newSheetName)
+    On Error GoTo 0
+
+    ' 如果Sheet不存在，则创建并设置标签颜色
+    If TryNewColorSheetR Is Nothing Then
+        Set TryNewColorSheetR = ThisWorkbook.Sheets.Add(, ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        TryNewColorSheetR.Name = newSheetName
+    End If
+        TryNewColorSheetR.Cells.Clear
+        TryNewColorSheetR.Tab.Color = sheetColor
+End Function
+
+Rem 该函数返回的是列的RC引用字符串，用于VBA拼接公式
+Function GetFullC(ws As Worksheet, rowIndex As Long, title As String) As String
+    Dim cell As Range
+    Dim columnNumber As Long
+    On Error Resume Next
+    Set cell = ws.Rows(rowIndex).Find(title, LookIn:=xlValues, LookAt:=xlWhole)
+    On Error GoTo 0
+
+    If Not cell Is Nothing Then
+        GetFullC = "'" & ws.Name & "'!C" & CStr(cell.Column)
+    Else
+        Err.Raise vbObjectError + 9999, "GetFullC", "【" & ws.Name & "】的【" & title & "】无法找到"
+    End If
+End Function
+
+Function CreateRAM1(dataWs As Worksheet, rowTitleField As String, firstField As String, secondFieldsTitle As Variant, sumField As String) As Worksheet
+    
+    Application.CutCopyMode = False
+    
+    Dim wb As Workbook
+    Dim thisWs As Worksheet
+    Dim wsUsedRangeAddress As String
+    Dim ram1_secondFieldsTitle As String
+    
+    Set wb = ThisWorkbook
+    Set thisWs = TryNewColorSheetR(RAM1_SHEET_NAME, "")
+    ram1_secondFieldsTitle = GetValuesByTitle(RAM1_SECOND_FIELDS_TITLE)(1)
+    wsUsedRangeAddress = dataWs.Name & "!" & dataWs.UsedRange.Address(, , xlR1C1)
+    wb.PivotCaches.Create(SourceType:=xlDatabase, SourceData:= _
+        wsUsedRangeAddress, Version:=8).CreatePivotTable TableDestination:= _
+        RAM1_SHEET_NAME & "!R3C1", TableName:=RAM1_SHEET_NAME, DefaultVersion:=8
+    With thisWs.PivotTables(RAM1_SHEET_NAME)
+        .ColumnGrand = False
+        .HasAutoFormat = False
+        .DisplayErrorString = False
+        .DisplayNullString = True
+        .EnableDrilldown = True
+        .ErrorString = "0"
+        .MergeLabels = False
+        .NullString = "0"
+        .PageFieldOrder = 2
+        .PageFieldWrapCount = 0
+        .PreserveFormatting = True
+        .RowGrand = False
+        .SaveData = True
+        .PrintTitles = False
+        .RepeatItemsOnEachPrintedPage = True
+        .TotalsAnnotation = False
+        .CompactRowIndent = 1
+        .InGridDropZones = False
+        .DisplayMemberPropertyTooltips = False
+        .DisplayContextTooltips = True
+        .ShowDrillIndicators = False
+        .PrintDrillIndicators = False
+        .AllowMultipleFilters = False
+        .SortUsingCustomLists = True
+        .FieldListSortAscending = False
+        .ShowValuesRow = False
+        .CalculatedMembersInFilters = False
+        .RowAxisLayout xlCompactRow
+        .DisplayFieldCaptions = True
+        With .PivotCache
+            .RefreshOnFileOpen = False
+            .MissingItemsLimit = xlMissingItemsDefault
+        End With
+        .RepeatAllLabels xlRepeatLabels
+        With .PivotFields(rowTitleField)
+            .Orientation = xlRowField
+            .Position = 1
+        End With
+        With .PivotFields(firstField)
+            .Orientation = xlRowField
+            .Position = 2
+        End With
+        .RowAxisLayout xlTabularRow
+        With .PivotFields(ram1_secondFieldsTitle)
+            .Orientation = xlColumnField
+            .Position = 1
+        End With
+        .AddDataField thisWs.PivotTables(RAM1_SHEET_NAME).PivotFields(sumField), sumField & ".SUM", xlSum
+    End With
+    
+    Dim allF As Variant
+    allF = Array(False, False, False, False, False, False, False, False, False, False, False, False)
+    thisWs.PivotTables(RAM1_SHEET_NAME).PivotFields(rowTitleField).Subtotals = allF
+    
+    Dim newWs As Worksheet
+    Set newWs = TryNewColorSheetR(rowTitleField, UNIQUE_TAIL & firstField)
+    Call PasteByVBA(thisWs.UsedRange, newWs.Range("A1"))
+    newWs.Rows("1:1").Delete Shift:=xlUp
+    newWs.Visible = xlSheetHidden
+    Set CreateRAM1 = newWs
+End Function
+
+Sub Sheet2Values(ws As Worksheet)
+    ws.UsedRange.Value = ws.UsedRange.Value
+End Sub
+
+Sub PasteByVBA(sourceRange As Range, targetRange As Range)
+    Set sourceRange = TrimDownRange(sourceRange)
+    Set targetRange = targetRange.Resize(sourceRange.Rows.Count, sourceRange.Columns.Count)
+    targetRange.Value = sourceRange.Value
+End Sub
+
+Sub 生成去重统计()
+    Dim t
+    t = Timer
+    Application.EnableEvents = True
+    ' Application.ScreenUpdating = False
+    Dim calcStatus As Variant
+    calcStatus = Application.Calculation
+    Application.Calculation = xlCalculationAutomatic
+    
+    Dim wb As Workbook, ws As Worksheet, rg As Range, str As String
+    Set wb = ThisWorkbook
+    
+    Dim rootSheet As Worksheet
+    Dim sourceSheetName_List As Variant
+    Dim sourceSheetName_i As Variant
+    Dim sourceSheet_i As Worksheet
+    Dim targetSheet_i As Worksheet
+    Dim ram2_Sheet As Worksheet, ram1_sheet As Worksheet
+    Dim ram2_ColumnVar_Range As Range
+    Dim resultRecordTitle_ColumnIndex As Long
+    Dim resultRecordTitle_ColumnName As String
+    Dim resultRecordTitle_Range As Range
+    
+    Set rootSheet = ThisWorkbook.Sheets(SOURCE_SHEET_NAME)
+    sourceSheetName_List = GetValuesByTitle(RAM1_RECORD_TITLES_FIELD)
+    Set ram1_sheet = ThisWorkbook.Sheets(RAM1_SHEET_NAME)
+    Set ram2_Sheet = ThisWorkbook.Sheets(RAM2_SHEET_NAME)
+    
+    Dim firstField_List As Variant
+    Dim secondField_List As Variant
+    Dim firstField_i As Variant
+    Dim secondField_i As Variant
+    Dim firstField_i_Column As Range
+    Dim secondField_i_Column As Range
+    Dim rootSumField As String
+    
+    firstField_List = GetValuesByTitle(RAM2_FIRST_FIELDS_FIELD)
+    secondField_List = GetValuesByTitle(RAM1_SECOND_FIELDS_FIELD)
+    rootSumField = GetValuesByTitle(RESULT_SUM_TARGET_FIELDS_FIELD)(1)
+    
+    Dim ram2_ResultRecordTitle_Range As Range
+    Dim resultFirstField_CurrentCell As Range
+    Dim resultSecondfield_CurrentCell As Range
+    Dim resultFunction_CurrentCell As Range
+    
+    Dim lastRow As Long
+    Dim s0 As String, s1 As String, s2 As String
+    
+    Dim commentShape As Shape
+    
+    For Each sourceSheetName_i In sourceSheetName_List
+        ram1_sheet.Cells.Clear
+        ram2_Sheet.Cells.Clear
+        
+        resultRecordTitle_ColumnIndex = GetColumnByArgs(rootSheet, 1, CStr(sourceSheetName_i)).Column
+        resultRecordTitle_ColumnName = GetColumnByArgs(rootSheet, 1, CStr(sourceSheetName_i)).Address
+        Set targetSheet_i = TryNewColorSheetR(CStr(sourceSheetName_i))
+        Set resultRecordTitle_Range = targetSheet_i.Range("$A:$A")
+        Call PasteByVBA(rootSheet.Range(resultRecordTitle_ColumnName), resultRecordTitle_Range)
+        Set resultRecordTitle_Range = TrimDownRange(resultRecordTitle_Range)
+        resultRecordTitle_Range.RemoveDuplicates Columns:=1, Header:=xlYes
+        targetSheet_i.Rows("$1:$1").Insert Shift:=xlDown
+        
+        ' 初始化结果sheet的一级二级字段，当前公式单元格的位置，每次写入会向右偏移
+        Set resultFirstField_CurrentCell = targetSheet_i.Range("$B$1")
+        Set resultSecondfield_CurrentCell = targetSheet_i.Range("$B$2")
+        Set resultFunction_CurrentCell = targetSheet_i.Range("$B$3")
+        
+        Set ram2_ColumnVar_Range = ram2_Sheet.Range("$C:$C")
+        For Each firstField_i In firstField_List
+            ram1_sheet.Cells.Clear
+            ram2_Sheet.Cells.Clear
+            
+            Set sourceSheet_i = CreateRAM1(rootSheet, CStr(sourceSheetName_i), CStr(firstField_i), RAM1_SECOND_FIELDS_TITLE, rootSumField)
+            Set firstField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(firstField_i))
+            
+            Call PasteByVBA(sourceSheet_i.UsedRange, ram2_Sheet.Range("A1"))
+            ram1_sheet.Cells.Clear
+            ' 接下来是COUNTIFS
+            For Each secondField_i In secondField_List
+                Set secondField_i_Column = GetColumnByArgs(sourceSheet_i, 1, CStr(secondField_i))
+                resultFirstField_CurrentCell.Value = CStr(firstField_i)
+                With resultSecondfield_CurrentCell
+                    .Value = CStr(secondField_i)
+                    .AddComment
+                    .Comment.Visible = False
+                    .Comment.Text Text:="秦睿征:此列的生成依据是:" & Chr(10) & Chr(10) & _
+                        " 将【" & sourceSheet_i.Name & "】隐藏Sheet的" & Chr(10) & _
+                        "【" & targetSheet_i.Range("$A$2").Value & "】字段和" & Chr(10) & _
+                        "【" & CStr(firstField_i) & "】字段联合去重后，" & Chr(10) & _
+                        "使用 COUNTIFS 统计" & Chr(10) & _
+                        "【" & CStr(secondField_i) & "】字段中" & Chr(10) & _
+                        "不为空且不为0的记录的数量"
+                    .Comment.Shape.Height = 108
+                    .Comment.Shape.Width = 150
+                End With
+                s0 = "'" & sourceSheet_i.Name & "'!C" & CStr(resultRecordTitle_ColumnIndex)
+                s1 = GetFullC(sourceSheet_i, 1, CStr(firstField_i))
+                
+                Rem RESULT公式
+                s2 = GetFullC(ram2_Sheet, 1, CStr(secondField_i))
+                resultFunction_CurrentCell.FormulaR1C1 = _
+                    "=COUNTIFS(RAM2!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0"")"
+                lastRow = targetSheet_i.UsedRange.Rows.Count
+                On Error Resume Next
+                resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
+                On Error GoTo 0
+                
+                Calculate
+                Call Sheet2Values(targetSheet_i)
+                Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
+                Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+                Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
+            Next secondField_i
+        Next firstField_i
+        ' 接下来是作为收尾的SUMIFS
+        For Each secondField_i In secondField_List
+            resultFirstField_CurrentCell.Value = RESULT_FINAL_SUM_FIELD
+            With resultSecondfield_CurrentCell
+                .Value = CStr(secondField_i)
+                .AddComment
+                .Comment.Visible = False
+                .Comment.Text Text:="秦睿征:此列的生成依据是:" & Chr(10) & Chr(10) & _
+                    "对【" & sourceSheet_i.Name & "】隐藏Sheet的" & Chr(10) & _
+                    "【" & CStr(secondField_i) & "】列的" & Chr(10) & _
+                    "【" & targetSheet_i.Range("$A$2").Value & "】列" & Chr(10) & _
+                    "的条件求和"
+                .Comment.Shape.Height = 108
+                .Comment.Shape.Width = 120
+            End With
+            s0 = "'" & sourceSheet_i.Name & "'!C" & CStr(resultRecordTitle_ColumnIndex)
+            s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i))
+            
+            Rem 公式
+            resultFunction_CurrentCell.FormulaR1C1 = _
+                "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1)"
+            lastRow = targetSheet_i.UsedRange.Rows.Count
+            On Error Resume Next
+            resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
+            On Error GoTo 0
+            
+            Calculate
+            Call Sheet2Values(targetSheet_i)
+            Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
+            Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
+            Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
+        Next secondField_i
+        
+    Next sourceSheetName_i
+    
+    
+    ram2_Sheet.Cells.Clear
+    Application.Calculation = calcStatus
+    Application.ScreenUpdating = True
+    Debug.Print "》总耗时" & CStr(Timer - t)
+End Sub
