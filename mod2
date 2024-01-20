@@ -246,7 +246,7 @@ Sub 生成去重统计()
     Dim resultFunction_CurrentCell As Range
     
     Dim lastRow As Long
-    Dim s0 As String, s1 As String, s2 As String
+    Dim s0 As String, s1 As String, s2 As String, sA As String, sR As String
     
     Dim commentShape As Shape
     
@@ -269,6 +269,7 @@ Sub 生成去重统计()
         Set resultFunction_CurrentCell = targetSheet_i.Range("$B$3")
         
         Set ram2_ColumnVar_Range = ram2_Sheet.Range("$C:$C")
+        sA = ""
         For Each firstField_i In firstField_List
             ram1_sheet.Cells.Clear
             ram2_Sheet.Cells.Clear
@@ -301,9 +302,9 @@ Sub 生成去重统计()
                 s1 = GetFullC(sourceSheet_i, 1, CStr(firstField_i))
                 
                 Rem RESULT公式
-                s2 = GetFullC(ram2_Sheet, 1, CStr(secondField_i))
+                s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i))
                 resultFunction_CurrentCell.FormulaR1C1 = _
-                    "=COUNTIFS(RAM2!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0""," & s1 & ",""<>(空白)"")"
+                    "=COUNTIFS('" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1," & s2 & ",""<>0""," & s1 & ",""<>(空白)"")"
                 lastRow = targetSheet_i.UsedRange.Rows.Count
                 On Error Resume Next
                 resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
@@ -315,6 +316,7 @@ Sub 生成去重统计()
                 Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
                 Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
             Next secondField_i
+            sA = sA & "," & GetFullC(rootSheet, 1, CStr(firstField_i)) & ",""<>"""
         Next firstField_i
         ' 接下来是作为收尾的SUMIFS
         For Each secondField_i In secondField_List
@@ -328,23 +330,26 @@ Sub 生成去重统计()
                     "【" & CStr(secondField_i) & "】列的" & Chr(10) & _
                     "【" & targetSheet_i.Range("$A$2").Value & "】列" & Chr(10) & _
                     "的条件求和" & Chr(10) & _
-                    CStr(firstField_i) & "为空白的情况下不会被记入"
+                    RAM2_FIRST_FIELDS_FIELD & "为空白的情况下不会被记入"
                 .Comment.Shape.Height = 108
                 .Comment.Shape.Width = 120
             End With
             s0 = "'" & sourceSheet_i.Name & "'!C" & CStr(resultRecordTitle_ColumnIndex)
-            s2 = GetFullC(sourceSheet_i, 1, CStr(secondField_i))
+            s2 = GetFullC(rootSheet, 1, CStr(GetValuesByTitle(RAM1_SECOND_FIELDS_TITLE)(1)))
+            sR = GetFullC(rootSheet, 1, CStr(rootSumField))
             
             Rem 公式
             resultFunction_CurrentCell.FormulaR1C1 = _
-                "=SUMIFS(" & s2 & ",'" & sourceSheet_i.Name & "'!C1,'" & targetSheet_i.Name & "'!RC1," & s1 & ",""<>(空白)"")"
+                "=SUMIFS(" & sR & "," & s2 & ",""" & secondField_i & """,'" & _
+                rootSheet.Name & "'!C" & resultRecordTitle_ColumnIndex & ",'" & targetSheet_i.Name & "'!RC1" & _
+                sA & ")"
             lastRow = targetSheet_i.UsedRange.Rows.Count
             On Error Resume Next
             resultFunction_CurrentCell.AutoFill Destination:=resultFunction_CurrentCell.Resize(lastRow - 2)
             On Error GoTo 0
             
             Calculate
-            Call Sheet2Values(targetSheet_i)
+            ' Call Sheet2Values(targetSheet_i)
             Set resultFirstField_CurrentCell = resultFirstField_CurrentCell.Offset(, 1)
             Set resultSecondfield_CurrentCell = resultSecondfield_CurrentCell.Offset(, 1)
             Set resultFunction_CurrentCell = resultFunction_CurrentCell.Offset(, 1)
